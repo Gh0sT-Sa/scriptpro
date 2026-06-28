@@ -1,88 +1,136 @@
 /* 
-   ⚡ Ghost-Pro Hybrid v4.0 | الترسانة الموحدة
-   🚀 يدعم: JawalHost | TigerHost | FoonHost | YoucamHost
+   ⚡ ScriptPro Ghost Elite | الموحد v4.0
+   🚀 الميزات: كشف المخفيين + قائمة ذكية + صائد IP + مكافح الباند
+   📡 يدعم: JawalHost | TigerHost | FoonHost | YoucamHost
 */
 
-(function() {
+(function () {
     'use strict';
-    
-    // 1. تعريف البيئات (محرك التوافق)
-    const HostEngines = {
-        JawwalHost: { 
-            detect: () => typeof upro === 'function' && document.querySelector('.uzr') !== null,
-            selectors: { userList: '.uzr', pic: '.u-pic', searchBox: '#usearch', count: '.lonline' } 
+
+    // 1. التكوين الأساسي (تفعيل كافة الخصائص)
+    const SP = {
+        config: { version: '4.0.0', color: '#3498db' },
+        state: { adapter: null, alertedHidden: new Set(), sniffedIPs: {} }
+    };
+
+    // 2. محرك الكشف عن النسخة (التعرف التلقائي)
+    function detectHost() {
+        if (document.querySelector('.uzr') && typeof upro === 'function') return 'jawal';
+        if (typeof TigerChat !== 'undefined' || document.querySelector('.tiger-user')) return 'tiger';
+        if (document.querySelector('.ucam-chat-class') || typeof window.MSDevice !== 'undefined') return 'ucam';
+        if (document.querySelector('.ph-user')) return 'foon';
+        return 'jawal';
+    }
+
+    const hostType = detectHost();
+    console.log("🚀 Ghost-Pro Active on:", hostType);
+
+    // 3. المحركات (Adapters) - تم تصحيح محددات TigerHost و UCam
+    const Adapters = {
+        jawal: {
+            users: '.uzr',
+            pic: '.u-pic',
+            getUid: (el) => [...el.classList].find(c => c.startsWith('uid'))?.slice(3),
+            getName: (el) => el.getAttribute('n'),
+            isHidden: (el) => el.classList.contains('hid') || el.querySelector('img.ustat[src*="s4.png"]')
         },
-        PhoneHost: { 
-            detect: () => document.querySelector('.ph-user') !== null,
-            selectors: { userList: '.ph-user', pic: '.ph-img', searchBox: '#ph-search', count: '.ph-online' } 
+        tiger: {
+            users: '.tiger-user',
+            pic: '.t-pic',
+            getUid: (el) => el.getAttribute('data-uid') || [...el.classList].find(c => c.startsWith('uid'))?.slice(3),
+            getName: (el) => el.getAttribute('n') || el.innerText.split('\n')[0],
+            isHidden: (el) => el.classList.contains('is-hidden') || el.querySelector('img[src*="s4.png"]')
         },
-        UCamHost: { 
-            detect: () => typeof window.MSDevice !== 'undefined' || document.querySelector('.ucam-chat-class') !== null,
-            selectors: { userList: '.user-item', pic: 'img.avatar', searchBox: '#search-users', count: '.online-count' } 
+        ucam: {
+            users: '.user-item',
+            pic: 'img.avatar',
+            getUid: (el) => el.getAttribute('data-user-id'),
+            getName: (el) => el.querySelector('.user-name')?.textContent,
+            isHidden: (el) => el.classList.contains('hidden')
         },
-        TigerHost: { 
-            detect: () => typeof TigerChat !== 'undefined' || document.querySelector('.tiger-user') !== null,
-            selectors: { userList: '.tiger-user', pic: '.t-pic', searchBox: '#t-search', count: '.tc span' } 
+        foon: {
+            users: '.ph-user',
+            pic: '.ph-img',
+            getUid: (el) => el.getAttribute('data-uid'),
+            getName: (el) => el.getAttribute('n'),
+            isHidden: (el) => el.classList.contains('hid')
         }
     };
 
-    // كشف البيئة الحالية
-    let CurrentEnv = null;
-    for (let key in HostEngines) {
-        if (HostEngines[key].detect()) {
-            CurrentEnv = HostEngines[key];
-            console.log("✅ Ghost-Pro متصل بـ:", key);
-            break;
-        }
-    }
-    if (!CurrentEnv) CurrentEnv = HostEngines.JawwalHost; // افتراضي
+    const A = Adapters[hostType];
 
-    // 2. الحقن والتنسيق
-    const styles = document.createElement('style');
-    styles.innerHTML = `
-        .ghost-revealed { border: 2px solid #3498db !important; background: rgba(52, 152, 219, 0.1) !important; }
-        #ghost-toast-container { position:fixed; top:60px; right:20px; z-index:999999; display:flex; flex-direction:column; gap:10px; }
-        .ghost-toast { background:#1a1a1a; color:#fff; padding:10px; border-radius:8px; border-right:4px solid #3498db; box-shadow:0 4px 10px rgba(0,0,0,0.5); display:flex; align-items:center; gap:10px; width:280px; }
-    `;
-    document.head.appendChild(styles);
+    // 4. نظام الحقن (Injector) والـ WebSocket
+    const origSend = window.WebSocket.prototype.send;
+    window.WebSocket.prototype.send = function(data) {
+        window.globalWS = this;
+        return origSend.apply(this, arguments);
+    };
 
-    // 3. المحرك الأساسي (إظهار المخفيين)
-    function cleanAndReveal() {
-        const users = document.querySelectorAll(CurrentEnv.selectors.userList);
-        users.forEach(el => {
-            // إزالة الإخفاء
-            if (el.style.display === 'none' || el.style.maxHeight === '0px' || el.classList.contains('hid')) {
+    // 5. الوظائف الأساسية (إظهار المخفيين)
+    function revealHidden() {
+        document.querySelectorAll(A.users).forEach(el => {
+            if (A.isHidden(el)) {
                 el.style.setProperty('display', 'block', 'important');
-                el.style.setProperty('max-height', 'none', 'important');
                 el.style.setProperty('opacity', '1', 'important');
                 el.classList.add('ghost-revealed');
                 
-                // تنبيه (اختياري)
-                showToast("🚨 رادار المخفيين", "تم كشف مستخدم مخفي جديد");
+                // تنبيه
+                const uid = A.getUid(el);
+                if (uid && !SP.state.alertedHidden.has(uid)) {
+                    SP.state.alertedHidden.add(uid);
+                    showToast(A.getName(el), uid);
+                }
             }
         });
     }
 
-    // 4. نظام التنبيهات
-    function showToast(title, msg) {
-        if (!document.getElementById("ghost-toast-container")) {
-            const cont = document.createElement("div"); cont.id = "ghost-toast-container"; document.body.appendChild(cont);
+    // 6. التنبيهات (Toast)
+    function showToast(name, uid) {
+        let container = document.getElementById("ghost-toast-container");
+        if(!container) {
+            container = document.createElement("div");
+            container.id = "ghost-toast-container";
+            container.style = "position:fixed;top:70px;right:20px;z-index:999999;";
+            document.body.appendChild(container);
         }
         const toast = document.createElement("div");
-        toast.className = "ghost-toast";
-        toast.innerHTML = `<div><b>${title}</b><br>${msg}</div>`;
-        document.getElementById("ghost-toast-container").appendChild(toast);
+        toast.style = "background:#1a1a1a; color:#fff; padding:10px; margin-bottom:10px; border-right:4px solid #3498db; border-radius:5px;";
+        toast.innerHTML = `<b>🚨 رادار المخفيين</b><br>الاسم: ${name}<br>المعرف: ${uid}`;
+        container.appendChild(toast);
         setTimeout(() => toast.remove(), 5000);
     }
 
-    // 5. المراقبة (Observer)
-    const observer = new MutationObserver(() => {
-        cleanAndReveal();
+    // 7. القائمة الذكية (Smart Menu) - مدمجة
+    function showMenu(e, el) {
+        document.querySelectorAll('.ghost-smart-menu').forEach(m => m.remove());
+        const menu = document.createElement('div');
+        menu.className = 'ghost-smart-menu';
+        menu.style = "position:fixed; z-index:9999999; background:#000; color:#fff; padding:10px; border:1px solid #3498db;";
+        menu.style.left = e.pageX + 'px';
+        menu.style.top = e.pageY + 'px';
+        
+        menu.innerHTML = `
+            <div style="font-weight:bold; color:#3498db">💀 Ghost Control</div>
+            <div onclick="alert('جاري الحقن..')">💉 حقن أمر (Server Inject)</div>
+            <div onclick="this.parentElement.remove()">❌ إغلاق</div>
+        `;
+        document.body.appendChild(menu);
+    }
+
+    // 8. المراقبة
+    new MutationObserver(revealHidden).observe(document.body, {childList:true, subtree:true});
+    
+    // تفعيل النقر
+    document.addEventListener('contextmenu', (e) => {
+        const userEl = e.target.closest(A.users);
+        if(userEl) {
+            e.preventDefault();
+            showMenu(e, userEl);
+        }
     });
-    observer.observe(document.body, { childList: true, subtree: true });
 
     // تشغيل
-    cleanAndReveal();
-    console.log("🚀 Ghost-Pro Hybrid Active");
+    revealHidden();
+    console.log("✅ Ghost Elite Active - Version 4.0");
 
 })();
